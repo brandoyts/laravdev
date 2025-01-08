@@ -1,0 +1,36 @@
+services:
+  app:
+    build:
+      args:
+        user: 1000
+        uid: 1000
+      context: .
+      dockerfile: ./docker/php/php.Dockerfile
+    restart: unless-stopped
+    working_dir: /var/www/html
+    volumes:
+      - ./src:/var/www/html
+
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: mydb
+      MYSQL_ROOT_PASSWORD: secret
+      MYSQL_PASSWORD: secret
+      MYSQL_USER: user
+      SERVICE_TAGS: dev
+      SERVICE_NAME: mysql
+    volumes:
+      - ./docker-compose/mysql:/docker-entrypoint-initdb.d
+
+  nginx:
+    build:
+      context: .
+      dockerfile: ./docker/nginx/nginx.Dockerfile
+    restart: unless-stopped
+    ports:
+      - 8000:80
+    volumes:
+      - ./src:/var/www/html
+      - ./docker-compose/nginx:/etc/nginx/conf.d/
