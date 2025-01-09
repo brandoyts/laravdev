@@ -1,19 +1,35 @@
-services:
-  app:
-    build:
-      args:
-        user: 1000
-        uid: 1000
-      context: .
-      dockerfile: ./docker/php/php.Dockerfile
-    restart: unless-stopped
-    working_dir: /var/www/html
-    volumes:
-      - ./src:/var/www/html
+networks:
+  laravel:
 
-  db:
+volumes:
+  mysql-data:
+
+services:
+  nginx:
+    container_name: laravel_nginx
+    build:
+      context: ./docker
+      dockerfile: nginx.Dockerfile
+      args:
+        - UID=${UID:-1000}
+        - GID=${GID:-1000}
+    ports:
+      - "8000:80"
+      - "8080:8080"
+    volumes:
+      - ./src:/var/www/html:delegated
+    depends_on:
+      - php
+      - mysql
+    networks:
+      - laravel
+
+  mysql:
+    container_name: laravel_mysql
     image: mysql:8.0
     restart: unless-stopped
+    ports:
+      - "3306:3306"
     environment:
       MYSQL_DATABASE: mydb
       MYSQL_ROOT_PASSWORD: secret
@@ -22,15 +38,53 @@ services:
       SERVICE_TAGS: dev
       SERVICE_NAME: mysql
     volumes:
-      - ./docker-compose/mysql:/docker-entrypoint-initdb.d
+      - mysql-data:/var/lib/mysql
+    networks:
+      - laravel
 
-  nginx:
+  php:
+    container_name: laravel_php
     build:
-      context: .
-      dockerfile: ./docker/nginx/nginx.Dockerfile
-    restart: unless-stopped
+      context: ./docker
+      dockerfile: php.Dockerfile
+      args:
+        - UID=${UID:-1000}
+        - GID=${GID:-1000}
     ports:
-      - 8000:80
+      - "9000:9000"
+    volumes:
+      - ./src:/var/www/html:delegated
+    networks:
+      - laravel
+
+  composer:
+    container_name: laravel_composer
+    build:
+      context: ./docker
+      dockerfile: php.Dockerfile
+      args:
+        - UID=${UID:-1000}
+        - GID=${GID:-1000}
     volumes:
       - ./src:/var/www/html
-      - ./docker-compose/nginx:/etc/nginx/conf.d/
+    depends_on:
+      - php
+    entrypoint: ["composer", "--ignore-platform-reqs"]
+    networks:
+      - laravel
+
+  artisan:
+    container_name: laravel_artisan
+    build:
+      context: ./docker
+      dockerfile: php.Dockerfile
+      args:
+        - UID=${UID:-1000}
+        - GID=${GID:-1000}
+    volumes:
+      - ./src:/var/www/html:delegated
+    depends_on:
+      - mysql
+    entrypoint: ["php", "/var/www/html/artisan"]
+    networks:
+      - laravel
